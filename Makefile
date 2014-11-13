@@ -43,7 +43,15 @@ CPU=-mcpu=cortex-m4
 FPU=-mfpu=fpv4-sp-d16 -mfloat-abi=softfp
 
 # Stellarisware path
-STELLARISWARE_PATH=~/stellaris/stellaris/
+STELLARISWARE_PATH= $(HOME)/Software/StellarisWare/
+# Binary, Object file path
+OBJ_PATH = ./obj
+# C Source Path
+SRC_PATH = ./src
+
+#Include Directory
+INCLUDE_DIRS = $(STELLARISWARE_PATH) $(SRC_PATH)
+INCLUDE_FLAG=-I. $(patsubst %, -I%, $(INCLUDE_DIRS))
 
 # Program name definition for ARM GNU C compiler.
 CC      = ${PREFIX_ARM}-gcc
@@ -53,12 +61,17 @@ LD      = ${PREFIX_ARM}-ld
 CP      = ${PREFIX_ARM}-objcopy
 # Program name definition for ARM GNU Object dump.
 OD      = ${PREFIX_ARM}-objdump
+# Program name definition for ARM GNU debugging
+GDB     = ${PREFIX_ARM}-gdb
+# Program name definition for ARM GNU debugging tui mode
+GDBTUI  = ${PREFIX_ARM}-gdb -tui
 
 # Option arguments for C compiler.
-CFLAGS=-mthumb ${CPU} ${FPU} -O0 -ffunction-sections -fdata-sections -MD -std=c99 -Wall -pedantic -c -g
+CFLAGS=-mthumb ${CPU} ${FPU} -O2 -ffunction-sections -fdata-sections -MD -std=c99 -Wall -pedantic -c -g
 # Library stuff passed as flags!
-CFLAGS+= -I ${STELLARISWARE_PATH} -DPART_$(PART) -c -DTARGET_IS_BLIZZARD_RA1
-
+CFLAGS+= ${INCLUDE_FLAG} -DPART_$(PART) -c -DTARGET_IS_BLIZZARD_RA1
+# Definition
+CFLAGS+= -DDEBUG
 # Flags for LD
 LFLAGS  = --gc-sections
 
@@ -78,7 +91,7 @@ LIBM_PATH=${shell ${CC} ${CFLAGS} -print-file-name=libm.a}
 # Uploader tool path.
 # Set a relative or absolute path to the upload tool program.
 # I used this project: https://github.com/utzig/lm4tools
-FLASHER=~/stellaris/lm4tools/lm4flash/lm4flash
+FLASHER=/usr/bin/lm4flash
 # Flags for the uploader program.
 FLASHER_FLAGS=
 
@@ -93,42 +106,62 @@ STARTUP_FILE = LM4F_startup
 # Linker file name
 LINKER_FILE = LM4F.ld
 
-SRC = $(wildcard *.c)
-OBJS = $(SRC:.c=.o)
+# C Source File
+C_SRC += $(STARTUP_FILE).c
+C_SRC += main.c
+
+# Object File
+OBJS = $(addsuffix .o,$(addprefix $(OBJ_PATH)/,$(basename $(C_SRC))))
+AXF = $(OBJ_PATH)/$(PROJECT_NAME).axf
+BIN = $(OBJ_PATH)/$(PROJECT_NAME).bin
+LST = $(OBJ_PATH)/$(PROJECT_NAME).lst
 
 #==============================================================================
 #                      Rules to make the target
 #==============================================================================
 
 #make all rule
-all: $(OBJS) ${PROJECT_NAME}.axf ${PROJECT_NAME}
+all: $(OBJS) $(AXF) ${PROJECT_NAME}
 
-%.o: %.c
+$(OBJ_PATH)/%.o: $(SRC_PATH)/%.c
 	@echo
 	@echo Compiling $<...
 	$(CC) -c $(CFLAGS) ${<} -o ${@}
 
-${PROJECT_NAME}.axf: $(OBJS)
+$(AXF): $(OBJS)
 	@echo
 	@echo Making driverlib
 	$(MAKE) -C ${STELLARISWARE_PATH}driverlib/
 	@echo
 	@echo Linking...
-	$(LD) -T $(LINKER_FILE) $(LFLAGS) -o ${PROJECT_NAME}.axf $(OBJS) ${STELLARISWARE_PATH}driverlib/gcc-cm4f/libdriver-cm4f.a $(LIBM_PATH) $(LIBC_PATH) $(LIB_GCC_PATH)
+	$(LD) -T $(LINKER_FILE) $(LFLAGS) -o ${AXF} $(OBJS) ${STELLARISWARE_PATH}driverlib/gcc-cm4f/libdriver-cm4f.a $(LIBM_PATH) $(LIBC_PATH) $(LIB_GCC_PATH)
 
-${PROJECT_NAME}: ${PROJECT_NAME}.axf
+${PROJECT_NAME}: $(AXF)
 	@echo
 	@echo Copying...
-	$(CP) $(CPFLAGS) ${PROJECT_NAME}.axf ${PROJECT_NAME}.bin
+	$(CP) $(CPFLAGS) ${AXF} ${BIN}
 	@echo
 	@echo Creating list file...
-	$(OD) $(ODFLAGS) ${PROJECT_NAME}.axf > ${PROJECT_NAME}.lst
+	$(OD) $(ODFLAGS) ${AXF} > ${LST}
 
 # make clean rule
 clean:
-	rm *.bin *.o *.d *.axf *.lst
+	rm -rf $(OBJ_PATH)/*
 
 # Rule to load the project to the board
 # I added a sudo because it's needed without a rule.
 load:
-	sudo ${FLASHER} ${PROJECT_NAME}.bin ${FLASHER_FLAGS}
+	${FLASHER} ${BIN} ${FLASHER_FLAGS}
+
+# GDB debugging
+gdb: clean all
+	./debug.sh gdb
+	
+gdbtui: clean all
+	./debug.sh gdbtui
+
+debug:
+	./debug.sh nemiver
+
+ddd:
+	./debug.sh ddd

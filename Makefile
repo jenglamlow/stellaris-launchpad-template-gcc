@@ -67,7 +67,7 @@ GDB     = ${PREFIX_ARM}-gdb
 GDBTUI  = ${PREFIX_ARM}-gdb -tui
 
 # Option arguments for C compiler.
-CFLAGS=-mthumb ${CPU} ${FPU} -O2 -ffunction-sections -fdata-sections -MD -std=c99 -Wall -pedantic -c -g
+CFLAGS=-mthumb ${CPU} ${FPU} -O0 -ffunction-sections -fdata-sections -MD -std=c99 -Wall -pedantic -c -g
 # Library stuff passed as flags!
 CFLAGS+= ${INCLUDE_FLAG} -DPART_$(PART) -c -DTARGET_IS_BLIZZARD_RA1
 # Definition
@@ -109,7 +109,8 @@ LINKER_FILE = LM4F.ld
 # C Source File
 C_SRC += $(STARTUP_FILE).c
 C_SRC += main.c
-C_SRC += template.c
+C_SRC += test_extern.c
+C_SRC += cmdline.c
 
 # Object File
 OBJS = $(addsuffix .o,$(addprefix $(OBJ_PATH)/,$(basename $(C_SRC))))
